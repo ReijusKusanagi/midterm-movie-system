@@ -1,6 +1,6 @@
 const express = require('express');
 const mongoose = require('mongoose');
-const movieRoutes = require('./routes/movieRoutes');
+const movieRoutes = require('./routes/movieRoutes'); // Import routes
 
 const app = express();
 const port = 3000;
@@ -10,7 +10,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Database Connection
-mongoose.connect("mongodb+srv://admin:admin123@ua-db.kmfcj8l.mongodb.net/MOVIE-WATCHLIST");
+mongoose.connect("[input mongodb connection string here]");
 let db = mongoose.connection;
 db.on("error", () => console.log("Cannot connect to MongoDB."));
 db.once("open", () => console.log("You are now connected to MongoDB Atlas"));
