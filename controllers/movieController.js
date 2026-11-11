@@ -41,32 +41,17 @@ module.exports.createMovie = (reqBody) => {
         });
 };
 
-// READ: Get all active (non-archived) movies
+// READ: Get all active (non-deleted, non-archived) movies
 module.exports.getAllMovies = (fields) => {
     const projectedFields = fields ? fields.split(',').join(' ') : '';
 
-    return Movie.find({ isArchived: false })
+    return Movie.find({ isDeleted: false, isArchived: false }) // Checks both flags
         .select(projectedFields)
         .then(result => {
             if (result.length == 0) {
                 return { code: 200, message: "There are no movies in your active watchlist yet." };
             } else {
                 return { code: 200, message: "Getting all movies. Success!", data: result };
-            }
-        })
-        .catch(err => {
-            return { code: 500, message: "Internal Server Error." };
-        });
-};
-
-// READ: Get all ARCHIVED movies
-module.exports.getArchivedMovies = () => {
-    return Movie.find({ isArchived: true })
-        .then(result => {
-            if (result.length == 0) {
-                return { code: 200, message: "There are no archived movies yet." };
-            } else {
-                return { code: 200, message: "SUCCESS: Getting all archived movies.", data: result };
             }
         })
         .catch(err => {
@@ -97,6 +82,7 @@ module.exports.updateMovie = (movieId, reqBody) => {
                 return { code: 404, message: "ERROR: Movie not found." };
             }
 
+            // RULE: Only allow personalScore if it's currently Watched OR becoming Watched
             const isBecomingWatched = reqBody.watchStatus === "Watched";
             const isCurrentlyWatched = movie.watchStatus === "Watched";
 
@@ -120,59 +106,44 @@ module.exports.updateMovie = (movieId, reqBody) => {
         });
 };
 
-// ARCHIVE: Move a single movie to archive (Replaces Soft Delete)
-module.exports.archiveMovie = (movieId) => {
+// SOFT DELETE: Mark record as deleted (deletedAt: Timestamp)
+module.exports.softDeleteMovie = (movieId) => {
     return Movie.findByIdAndUpdate(
         movieId,
-        { isArchived: true },
+        { isDeleted: true, deletedAt: Date.now() },
         { new: true }
     ).then((result) => {
         if (!result) {
-            return { code: 404, message: "ERROR: Failed to archive movie or movie not found." };
+            return { code: 404, message: "ERROR: Failed to delete movie or movie not found." };
         } else {
-            return { code: 200, message: "SUCCESS: Movie archived successfully.", data: result };
+            return { code: 200, message: "SUCCESS: Movie soft deleted successfully.", data: result };
         }
     }).catch(err => {
         return { code: 500, message: "Internal Server Error." };
     });
 };
 
-// UNARCHIVE: Restore a single movie from archive
-module.exports.unarchiveMovie = (movieId) => {
+// RESTORE: Undo a soft delete - As per instructions
+module.exports.restoreMovie = (movieId) => {
     return Movie.findByIdAndUpdate(
         movieId,
-        { isArchived: false },
+        { isDeleted: false, deletedAt: null },
         { new: true }
     ).then((result) => {
         if (!result) {
-            return { code: 404, message: "ERROR: Failed to unarchive movie or movie not found." };
+            return { code: 404, message: "ERROR: Failed to restore movie or movie not found." };
         } else {
-            return { code: 200, message: "SUCCESS: Movie unarchived successfully.", data: result };
+            return { code: 200, message: "SUCCESS: Movie restored successfully.", data: result };
         }
     }).catch(err => {
         return { code: 500, message: "Internal Server Error." };
     });
 };
 
-// HARD DELETE: Permanently remove from database
-module.exports.hardDeleteMovie = (movieId) => {
-    return Movie.findByIdAndDelete(movieId)
-        .then((result) => {
-            if (!result) {
-                return { code: 404, message: "ERROR: Movie not found." };
-            } else {
-                return { code: 200, message: "SUCCESS: Movie permanently deleted from database.", data: result };
-            }
-        })
-        .catch(err => {
-            return { code: 500, message: "Internal Server Error." };
-        });
-};
-
-// ARCHIVE WATCHED: Move all "Watched" movies to archive in one query
+// ARCHIVE WATCHED: Move all "Watched" movies to archive in a single query
 module.exports.archiveWatchedMovies = () => {
     return Movie.updateMany(
-        { watchStatus: "Watched", isArchived: false },
+        { watchStatus: "Watched", isArchived: false, isDeleted: false },
         { isArchived: true }
     ).then((result) => {
         if (result.modifiedCount === 0) {
@@ -185,11 +156,27 @@ module.exports.archiveWatchedMovies = () => {
     });
 };
 
-// EXTRA: Analytics Aggregation
+// READ: Get all ARCHIVED movies
+module.exports.getArchivedMovies = () => {
+    // Find movies that are archived, but NOT permanently soft-deleted
+    return Movie.find({ isArchived: true, isDeleted: false }) 
+        .then(result => {
+            if (result.length == 0) {
+                return { code: 200, message: "There are no archived movies yet." };
+            } else {
+                return { code: 200, message: "SUCCESS: Getting all archived movies.", data: result };
+            }
+        })
+        .catch(err => {
+            return { code: 500, message: "Internal Server Error." };
+        });
+};
+
+// EXTRA (15 pts): Analytics Aggregation
 module.exports.getMovieStats = () => {
     return Movie.aggregate([
-        { $match: { isArchived: false } },
-        { $unwind: "$genre" },
+        { $match: { isDeleted: false, isArchived: false } }, // Only active movies
+        { $unwind: "$genre" }, // Flattens array for grouping
         {
             $group: {
                 _id: "$genre",
@@ -208,4 +195,19 @@ module.exports.getMovieStats = () => {
     }).catch(err => {
         return { code: 500, message: "Internal Server Error." };
     });
+};
+
+// Hard Delete (Permanently remove from database)
+module.exports.hardDeleteMovie = (movieId) => {
+    return Movie.findByIdAndDelete(movieId)
+        .then((result) => {
+            if (!result) {
+                return { code: 404, message: "ERROR: Movie not found." };
+            } else {
+                return { code: 200, message: "SUCCESS: Movie permanently deleted from database.", data: result };
+            }
+        })
+        .catch(err => {
+            return { code: 500, message: "Internal Server Error." };
+        });
 };

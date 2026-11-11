@@ -4,14 +4,8 @@ const movieSchema = new mongoose.Schema({
     title: { type: String },
     director: { type: String },
     releaseYear: { type: Number },
-    leadActors: { 
-        type: [String],  
-        default: []      
-    },  
-    genre: { 
-        type: [String],  
-        default: []      
-    },
+    leadActors: { type: [String], default: [] },
+    genre: { type: [String], default: [] },
     watchStatus: { 
         type: String, 
         enum: ['To Watch', 'Watched'], 
@@ -19,7 +13,9 @@ const movieSchema = new mongoose.Schema({
     },
     audienceScore: { type: Number, min: 0, max: 10 },
     personalScore: { type: Number, min: 0, max: 10 },
-    synopsis: { type: String },
+    synopsis: { type: String }, 
+    isDeleted: { type: Boolean, default: false },
+    deletedAt: { type: Date, default: null },
     isArchived: { type: Boolean, default: false }
 }, { timestamps: true });
 
